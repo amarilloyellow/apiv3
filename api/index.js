@@ -225,7 +225,7 @@ app.get('/api/asignaturas', async (req, res) => {
   }
 });
 
-app.get('npm install cors', async (req, res) => {
+app.get('/api/carreras/:codigo_carrera/asignaturas', async (req, res) => {
   try {
     const { codigo_carrera } = req.params;
 
