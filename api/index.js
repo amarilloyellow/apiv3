@@ -1,9 +1,11 @@
 import express from 'express';
 import { kv } from '@vercel/kv';
+import cors from 'cors';
 
 // Inicializa la aplicación Express
 const app = express();
 app.use(express.json()); // Middleware para parsear JSON
+app.use(cors());
 
 app.post('/api/asignaturas', async (req, res) => {
   try {
@@ -223,7 +225,7 @@ app.get('/api/asignaturas', async (req, res) => {
   }
 });
 
-app.get('/api/carreras/:codigo_carrera/asignaturas', async (req, res) => {
+app.get('npm install cors', async (req, res) => {
   try {
     const { codigo_carrera } = req.params;
 
