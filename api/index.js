@@ -157,23 +157,68 @@ app.delete('/api/asignaturas/:codigo_asignatura', async (req, res) => {
 
 app.get('/api/asignaturas', async (req, res) => {
   try {
-    const keys = [];
-    // kv.scan() devuelve un iterador, no todos los datos de una vez
+    // 1. Obtener todas las asignaturas base
+    const asignaturaKeys = [];
     for await (const key of kv.scanIterator({ match: 'asig:*' })) {
-      keys.push(key);
+      asignaturaKeys.push(key);
     }
 
-    if (keys.length === 0) {
+    if (asignaturaKeys.length === 0) {
       return res.status(200).json([]);
     }
 
-    // mget() es muy eficiente para obtener múltiples valores a la vez
-    const asignaturas = await kv.mget(...keys);
-    
-    return res.status(200).json(asignaturas);
+    const asignaturasBase = await kv.mget(...asignaturaKeys);
+
+    // 2. Recolectar todas las claves de vínculos que necesitamos buscar
+    const allVinculoKeys = [];
+    asignaturasBase.forEach((asignatura, index) => {
+      const codigoAsignatura = asignaturaKeys[index].split(':')[1];
+      if (asignatura.carreras) {
+        for (const codigoCarrera of asignatura.carreras) {
+          allVinculoKeys.push(`vinculo:${codigoCarrera}:${codigoAsignatura}`);
+        }
+      }
+    });
+
+    // 3. Obtener todos los datos de los vínculos en una sola petición
+    let vinculosData = [];
+    if (allVinculoKeys.length > 0) {
+      vinculosData = await kv.mget(...allVinculoKeys);
+    }
+
+    // 4. Crear un mapa para buscar fácilmente los datos de los vínculos
+    const vinculosMap = new Map();
+    allVinculoKeys.forEach((key, index) => {
+      vinculosMap.set(key, vinculosData[index]);
+    });
+
+    // 5. Ensamblar la respuesta final
+    const resultadoFinal = asignaturasBase.map((asignatura, index) => {
+      const codigoAsignatura = asignaturaKeys[index].split(':')[1];
+      
+      const carrerasDetalladas = (asignatura.carreras || []).map(codigoCarrera => {
+        const vinculoKey = `vinculo:${codigoCarrera}:${codigoAsignatura}`;
+        const vinculo = vinculosMap.get(vinculoKey);
+        
+        return {
+          codigo_carrera: codigoCarrera,
+          semestre: vinculo?.semestre,
+          requisitos: vinculo?.requisitos || []
+        };
+      });
+
+      return {
+        codigo_asignatura: codigoAsignatura,
+        nombre_asignatura: asignatura.nombre,
+        unidades_credito: asignatura.uc,
+        carreras: carrerasDetalladas
+      };
+    });
+
+    return res.status(200).json(resultadoFinal);
 
   } catch (error) {
-    console.error('Error al obtener todas las asignaturas:', error);
+    console.error('Error al obtener todas las asignaturas detalladas:', error);
     return res.status(500).json({ message: 'Error interno del servidor.' });
   }
 });
